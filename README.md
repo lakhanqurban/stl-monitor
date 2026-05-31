@@ -40,26 +40,26 @@ in the CSV summaries and plots.
 
 | Metric | Meaning |
 |--------|---------|
-| `P1_lane_keeping` | Lane-keeping property: `|cte| < 0.8` |
+| `P1_lane_keeping` | Lane-keeping property: `abs(cte) < 0.8` |
 | `P2_speed_stability` | Speed property: `speed > 5` after a 2 s warm-up |
-| `P3_steering_smoothness` | Steering property: `|str_angle| < 0.7` |
-| `P4_heading_alignment` | Heading property: `|hdg_err| < 0.25` after 0.5 s |
-| `P5_recovery` | Recovery property: if `|cte| > 0.5`, return to `|cte| < 0.2` within 3 s |
-| `P6_curvature_safety` | Curvature property: if `|curv| > 0.03`, keep `|cte| < 0.4` |
+| `P3_steering_smoothness` | Steering property: `abs(str_angle) < 0.7` |
+| `P4_heading_alignment` | Heading property: `abs(hdg_err) < 0.25` after 0.5 s |
+| `P5_recovery` | Recovery property: if `abs(cte) > 0.5`, return to `abs(cte) < 0.2` within 3 s |
+| `P6_curvature_safety` | Curvature property: if `abs(curv) > 0.03`, keep `abs(cte) < 0.4` |
 | `max_abs_cte` | Worst absolute cross-track error on the road |
 | `mean_abs_cte` | Average absolute cross-track error |
-| `cte_boundary_violation_rate` | Fraction of samples with `|cte| >= 1.5` |
-| `cte_near_boundary_rate` | Fraction of samples with `|cte| >= 1.0` |
-| `cte_spike_count_gt_1p0` | Number of contiguous `|cte| > 1.0` spikes |
+| `cte_boundary_violation_rate` | Fraction of samples with `abs(cte) >= 1.5` |
+| `cte_near_boundary_rate` | Fraction of samples with `abs(cte) >= 1.0` |
+| `cte_spike_count_gt_1p0` | Number of contiguous `abs(cte) > 1.0` spikes |
 | `cte_recovery_count_within_2p5s` | Number of spikes that recover within 2.5 s |
 | `cte_recovery_success_rate_2p5s` | Fraction of spikes that recover within 2.5 s |
 | `cte_recovery_latency_mean_s` | Mean recovery latency for recovered spikes |
 | `cte_recovery_latency_max_s` | Maximum recovery latency for recovered spikes |
-| `steering_jerk_rate_0p1` | Fraction of steering changes with `|Δsteering| >= 0.1` |
+| `steering_jerk_rate_0p1` | Fraction of steering changes with `abs(Δsteering) >= 0.1` |
 | `mean_abs_steering_delta` | Mean absolute steering change between samples |
 | `speed_over_threshold_rate` | Fraction of samples with `speed >= 30` |
 | `mean_abs_throttle_delta` | Mean absolute throttle change, if throttle exists |
-| `throttle_jerk_rate_0p2` | Fraction of throttle changes with `|Δthrottle| >= 0.2`, if throttle exists |
+| `throttle_jerk_rate_0p2` | Fraction of throttle changes with `abs(Δthrottle) >= 0.2`, if throttle exists |
 
 ---
 
