@@ -37,6 +37,14 @@ CTE_RECOVERY_SPIKE_THRESHOLD = 1.0
 CTE_RECOVERY_THRESHOLD = 0.3
 CTE_RECOVERY_HORIZON_S = 2.5
 
+PROPERTY_WEIGHTS = {
+    'P1_lane_keeping': 3.0,
+    'P2_speed_stability': 2.0,
+    'P3_steering_smoothness': 1.0,
+    'P4_heading_alignment': 2.0,
+    'P5_recovery': 3.0,
+    'P6_curvature_safety': 2.5,
+}
 
 def find_csv_files(data_dir, recursive=False):
     data_path = Path(data_dir)
@@ -134,6 +142,14 @@ def compute_analysis_metrics(df):
     metrics['cte_recovery_success_rate_2p5s'] = float(len(recovery_latencies) / spike_count) if spike_count else float('nan')
     metrics['cte_recovery_latency_mean_s'] = float(np.mean(recovery_latencies)) if recovery_latencies else float('nan')
     metrics['cte_recovery_latency_max_s'] = float(np.max(recovery_latencies)) if recovery_latencies else float('nan')
+  
+    high_curv_mask = np.abs(curvature) > 0.03
+    if np.any(high_curv_mask):
+        metrics['mean_abs_cte_on_high_curvature'] = float(np.mean(np.abs(cte[high_curv_mask])))
+        metrics['max_abs_cte_on_high_curvature'] = float(np.max(np.abs(cte[high_curv_mask])))
+    else:
+        metrics['mean_abs_cte_on_high_curvature'] = float('nan')
+        metrics['max_abs_cte_on_high_curvature'] = float('nan')
 
     if 'throttle' in df.columns:
         throttle = df['throttle'].values
@@ -301,6 +317,7 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         rho_col = f'{prop_name}_rho'
         rho = pd.to_numeric(results_df.get(rho_col, pd.Series(dtype=float)), errors='coerce')
         finite_rho = rho[np.isfinite(rho)]
+        violated_rho = finite_rho[finite_rho < 0]
         inf_count = int(np.isinf(rho).sum()) if len(rho) else 0
 
         property_rows.append({
@@ -313,6 +330,8 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
             'mean_rho_finite': float(finite_rho.mean()) if not finite_rho.empty else float('nan'),
             'median_rho_finite': float(finite_rho.median()) if not finite_rho.empty else float('nan'),
             'p95_rho_finite': float(finite_rho.quantile(0.95)) if not finite_rho.empty else float('nan'),
+            'mean_rho_when_violated': float(violated_rho.mean()) if not violated_rho.empty else float('nan'),
+            'p5_rho_when_violated': float(violated_rho.quantile(0.05)) if not violated_rho.empty else float('nan'),
             'inf_rho_count': inf_count,
         })
 
@@ -336,11 +355,19 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         })
 
     metrics_summary_df = pd.DataFrame(metric_rows)
+  
+    risk_df = violations_summary_df.copy()
+    risk_df['property_weight'] = risk_df['property'].map(PROPERTY_WEIGHTS).fillna(1.0)
+    risk_df['weighted_violation_duration_s'] = (
+        pd.to_numeric(risk_df['total_violation_duration_s'], errors='coerce').fillna(0.0)
+        * pd.to_numeric(risk_df['property_weight'], errors='coerce').fillna(1.0)
+    )
 
-    road_total = violations_summary_df.groupby('road_id', as_index=False).agg(
+    road_total = risk_df.groupby('road_id', as_index=False).agg(
         total_violation_duration_s=('total_violation_duration_s', 'sum'),
         violated_properties_count=('violated', 'sum'),
-    ).sort_values('total_violation_duration_s', ascending=False)
+        weighted_risk_score=('weighted_violation_duration_s', 'sum'),
+    ).sort_values(['weighted_risk_score', 'total_violation_duration_s'], ascending=False)
 
     overall_summary_df = pd.DataFrame([{
         'roads_evaluated': int(results_df['road_id'].nunique()),
@@ -348,6 +375,7 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         'avg_total_violation_duration_s_per_road': float(road_total['total_violation_duration_s'].mean()),
         'p95_total_violation_duration_s_per_road': float(road_total['total_violation_duration_s'].quantile(0.95)),
         'top_risk_road_id': str(road_total.iloc[0]['road_id']) if not road_total.empty else '',
+        'top_risk_weighted_risk_score': float(road_total.iloc[0]['weighted_risk_score']) if not road_total.empty else float('nan'),
         'top_risk_total_violation_duration_s': float(road_total.iloc[0]['total_violation_duration_s']) if not road_total.empty else float('nan'),
     }])
 
@@ -437,6 +465,8 @@ def plot_analysis_metrics_heatmap(metrics_df, output_path):
         'cte_recovery_count_within_2p5s',
         'cte_recovery_success_rate_2p5s',
         'cte_recovery_latency_mean_s',
+        'mean_abs_cte_on_high_curvature',
+        'max_abs_cte_on_high_curvature',
         'steering_jerk_rate_0p1',
         'mean_abs_steering_delta',
         'speed_over_threshold_rate',
