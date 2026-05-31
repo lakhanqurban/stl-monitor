@@ -55,6 +55,8 @@ in the CSV summaries and plots.
 | `cte_recovery_success_rate_2p5s` | Fraction of spikes that recover within 2.5 s |
 | `cte_recovery_latency_mean_s` | Mean recovery latency for recovered spikes |
 | `cte_recovery_latency_max_s` | Maximum recovery latency for recovered spikes |
+| `mean_abs_cte_on_high_curvature` | Mean absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
+| `max_abs_cte_on_high_curvature` | Maximum absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
 | `steering_jerk_rate_0p1` | Fraction of steering changes with `abs(Δsteering) >= 0.1` |
 | `mean_abs_steering_delta` | Mean absolute steering change between samples |
 | `speed_over_threshold_rate` | Fraction of samples with `speed >= 30` |
@@ -128,8 +130,8 @@ Publication-ready aggregate reports are exported automatically:
 
 | File | Purpose |
 |------|---------|
-| `summary_overall_clean.csv` | One-row global summary (roads evaluated, p95 risk, top-risk road) |
-| `summary_properties_clean.csv` | Per-property violation rates, duration stats, finite-ρ stats, `inf` counts |
+| `summary_overall_clean.csv` | One-row global summary (roads evaluated, p95 risk, top-risk road, weighted risk score) |
+| `summary_properties_clean.csv` | Per-property violation rates, duration stats, finite-ρ stats, violated-only ρ severity stats, `inf` counts |
 | `summary_metrics_clean.csv` | Distribution summary for each analysis metric (mean/median/p95/max/winsorized mean) |
 | `summary_top_risk_roads.csv` | Top 20 roads by total violation duration |
 
