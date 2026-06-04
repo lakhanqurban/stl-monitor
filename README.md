@@ -67,19 +67,28 @@ in the CSV summaries and plots.
 
 ## STL Semantics
 
-Robustness is computed using standard quantitative STL semantics
-(Donzé & Maler, 2010):
+Each property is evaluated as a robustness score `ρ` — a single real
+number summarizing how strongly the property is satisfied on a given
+trace. The sign is the verdict:
 
-```
-ρ(f(x) ≥ 0, s, t)  =  f(s(t))
-ρ(¬φ, s, t)         = -ρ(φ, s, t)
-ρ(φ ∧ ψ, s, t)      =  min(ρ(φ,s,t), ρ(ψ,s,t))
-ρ(G[a,b]φ, s, t)    =  min_{t'∈[t+a,t+b]} ρ(φ, s, t')
-ρ(F[a,b]φ, s, t)    =  max_{t'∈[t+a,t+b]} ρ(φ, s, t')
-```
+- `ρ > 0` → property satisfied (the larger, the more "slack")
+- `ρ < 0` → property violated (the more negative, the worse)
+- `ρ = 0` → right on the boundary
 
-Implemented from scratch in `stl_monitor.py` without external STL libraries,
-making the semantics explicit and inspectable.
+The formulas in our property suite are built from three small building
+blocks: a single check against a threshold (e.g. `|cte| < 0.8`), the
+usual boolean connectives (`AND`, `OR`, `NOT`, `implies`), and the
+temporal operators `G` (must hold throughout a time window) and `F`
+(must hold at least once in a time window). They compose in the usual
+way — for example, P5's "if we drift, we must recover within 3 s" is
+written as `G( drifting → F[0,3](recovered) )` — and the implementation
+in [`stl_monitor.py`](./stl_monitor.py) walks the resulting formula
+tree once to produce the full robustness number in a single call.
+
+The full quantitative semantics follow Donzé & Maler (2010), and the
+implementation lives in [`stl_monitor.py`](./stl_monitor.py) — built
+from scratch with no external STL library, so the rules above are
+exactly what the code does.
 
 ---
 
