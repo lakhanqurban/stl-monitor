@@ -22,15 +22,47 @@ import numpy as np
 
 
 # ---------------------------------------------------------------------------
+# Thresholds — single source of truth
+# ---------------------------------------------------------------------------
+# These named constants are the single source of truth for the property
+# thresholds. The STL formulas below reference them, and `runner.py`
+# imports them to keep its violation-segment masks in sync. Change a
+# value here and both the formula and the mask update together.
+
+# P1 — Lane Keeping Safety
+P1_CTE_LIMIT = 0.8
+
+# P2 — Speed Stability
+P2_WARMUP_S = 2.0
+P2_MIN_SPEED = 5.0
+
+# P3 — Steering Smoothness
+P3_STR_ANGLE_LIMIT = 0.7
+
+# P4 — Heading Alignment
+P4_INIT_SKIP_S = 0.5
+P4_HDG_ERR_LIMIT = 0.25
+
+# P5 — Recovery After Drift
+P5_DRIFT_THRESHOLD = 0.5
+P5_RECOVERED_THRESHOLD = 0.2
+P5_RECOVERY_HORIZON_S = 3.0
+
+# P6 — High-Curvature Safety
+P6_CURVATURE_THRESHOLD = 0.03
+P6_TIGHT_CTE_LIMIT = 0.4
+
+
+# ---------------------------------------------------------------------------
 # P1 — Lane Keeping Safety
 # G (|cte| < 0.8)
 # Rationale: CTE std=0.36, max=1.09. 0.8 = ~2σ safety threshold.
 # Violation means the agent is dangerously close to leaving its lane.
 # ---------------------------------------------------------------------------
 P1_lane_keeping = Globally(
-    Predicate('cte', lambda v: 0.8 - abs(v),
-              label='|cte| < 0.8'),
-    label="P1: G(|cte| < 0.8)"
+    Predicate('cte', lambda v: P1_CTE_LIMIT - abs(v),
+              label=f'|cte| < {P1_CTE_LIMIT}'),
+    label=f"P1: G(|cte| < {P1_CTE_LIMIT})"
 )
 
 # ---------------------------------------------------------------------------
@@ -41,10 +73,10 @@ P1_lane_keeping = Globally(
 # Stalling mid-road is a safety failure mode.
 # ---------------------------------------------------------------------------
 P2_speed_stability = Globally(
-    Predicate('speed', lambda v: v - 5.0,
-              label='speed > 5.0'),
-    a=2.0,
-    label="P2: G[2,∞](speed > 5)"
+    Predicate('speed', lambda v: v - P2_MIN_SPEED,
+              label=f'speed > {P2_MIN_SPEED}'),
+    a=P2_WARMUP_S,
+    label=f"P2: G[{P2_WARMUP_S},∞](speed > {P2_MIN_SPEED})"
 )
 
 # ---------------------------------------------------------------------------
@@ -55,9 +87,9 @@ P2_speed_stability = Globally(
 # Abrupt steering is a precursor to instability.
 # ---------------------------------------------------------------------------
 P3_steering_smoothness = Globally(
-    Predicate('str_angle', lambda v: 0.7 - abs(v),
-              label='|str_angle| < 0.7'),
-    label="P3: G(|str_angle| < 0.7)"
+    Predicate('str_angle', lambda v: P3_STR_ANGLE_LIMIT - abs(v),
+              label=f'|str_angle| < {P3_STR_ANGLE_LIMIT}'),
+    label=f"P3: G(|str_angle| < {P3_STR_ANGLE_LIMIT})"
 )
 
 # ---------------------------------------------------------------------------
@@ -68,10 +100,10 @@ P3_steering_smoothness = Globally(
 # Large heading error means the agent is pointing away from the road.
 # ---------------------------------------------------------------------------
 P4_heading_alignment = Globally(
-    Predicate('hdg_err', lambda v: 0.25 - abs(v),
-              label='|hdg_err| < 0.25'),
-    a=0.5,  # skip initialization spike
-    label="P4: G[0.5,∞](|hdg_err| < 0.25)"
+    Predicate('hdg_err', lambda v: P4_HDG_ERR_LIMIT - abs(v),
+              label=f'|hdg_err| < {P4_HDG_ERR_LIMIT}'),
+    a=P4_INIT_SKIP_S,  # skip initialization spike
+    label=f"P4: G[{P4_INIT_SKIP_S},∞](|hdg_err| < {P4_HDG_ERR_LIMIT})"
 )
 
 # ---------------------------------------------------------------------------
@@ -81,12 +113,15 @@ P4_heading_alignment = Globally(
 # it must recover within 3 seconds. Tests the agent's self-correction
 # capability — key for resilience evaluation.
 # ---------------------------------------------------------------------------
-_drifting   = Predicate('cte', lambda v: abs(v) - 0.5, label='|cte| > 0.5')
-_recovered  = Predicate('cte', lambda v: 0.2 - abs(v),  label='|cte| < 0.2')
+_drifting   = Predicate('cte', lambda v: abs(v) - P5_DRIFT_THRESHOLD,
+                        label=f'|cte| > {P5_DRIFT_THRESHOLD}')
+_recovered  = Predicate('cte', lambda v: P5_RECOVERED_THRESHOLD - abs(v),
+                        label=f'|cte| < {P5_RECOVERED_THRESHOLD}')
 
 P5_recovery = Globally(
-    _drifting.implies(Eventually(_recovered, a=0.0, b=3.0)),
-    label="P5: G((|cte|>0.5) → F[0,3](|cte|<0.2))"
+    _drifting.implies(Eventually(_recovered, a=0.0, b=P5_RECOVERY_HORIZON_S)),
+    label=(f"P5: G((|cte|>{P5_DRIFT_THRESHOLD}) → "
+           f"F[0,{P5_RECOVERY_HORIZON_S}](|cte|<{P5_RECOVERED_THRESHOLD}))")
 )
 
 # ---------------------------------------------------------------------------
@@ -96,14 +131,15 @@ P5_recovery = Globally(
 # lane keeping must be tighter (0.4m vs 0.8m normal threshold).
 # This is a context-dependent safety property — more demanding than P1.
 # ---------------------------------------------------------------------------
-_high_curve = Predicate('curvature', lambda v: abs(v) - 0.03,
-                         label='|curvature| > 0.03')
-_tight_lane = Predicate('cte', lambda v: 0.4 - abs(v),
-                         label='|cte| < 0.4')
+_high_curve = Predicate('curvature', lambda v: abs(v) - P6_CURVATURE_THRESHOLD,
+                         label=f'|curvature| > {P6_CURVATURE_THRESHOLD}')
+_tight_lane = Predicate('cte', lambda v: P6_TIGHT_CTE_LIMIT - abs(v),
+                         label=f'|cte| < {P6_TIGHT_CTE_LIMIT}')
 
 P6_curvature_safety = Globally(
     _high_curve.implies(_tight_lane),
-    label="P6: G((|curv|>0.03) → (|cte|<0.4))"
+    label=(f"P6: G((|curv|>{P6_CURVATURE_THRESHOLD}) → "
+           f"(|cte|<{P6_TIGHT_CTE_LIMIT}))")
 )
 
 # ---------------------------------------------------------------------------

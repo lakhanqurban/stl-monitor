@@ -14,7 +14,7 @@ Usage:
     python runner.py --data_dir ./data --output_dir ./results --trace_roads 0 5
 """
 
-import os, sys, argparse
+import os, sys, argparse, math
 import pandas as pd
 import numpy as np
 import matplotlib
@@ -25,7 +25,13 @@ from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(__file__))
 from stl_monitor import Signal
-from ads_properties import ALL_PROPERTIES
+from ads_properties import (
+    ALL_PROPERTIES,
+    P1_CTE_LIMIT, P2_WARMUP_S, P2_MIN_SPEED,
+    P3_STR_ANGLE_LIMIT, P4_HDG_ERR_LIMIT, P4_INIT_SKIP_S,
+    P5_DRIFT_THRESHOLD, P5_RECOVERED_THRESHOLD, P5_RECOVERY_HORIZON_S,
+    P6_CURVATURE_THRESHOLD, P6_TIGHT_CTE_LIMIT,
+)
 
 SIGNAL_COLS = ['speed', 'cte', 'str_angle', 'hdg_err', 'curvature']
 
@@ -36,6 +42,7 @@ THROTTLE_JERK_THRESHOLD = 0.20
 CTE_RECOVERY_SPIKE_THRESHOLD = 1.0
 CTE_RECOVERY_THRESHOLD = 0.3
 CTE_RECOVERY_HORIZON_S = 2.5
+PROGRESS_EVERY = 50
 
 PROPERTY_WEIGHTS = {
     'P1_lane_keeping': 3.0,
@@ -45,6 +52,7 @@ PROPERTY_WEIGHTS = {
     'P5_recovery': 3.0,
     'P6_curvature_safety': 2.5,
 }
+
 
 def find_csv_files(data_dir, recursive=False):
     data_path = Path(data_dir)
@@ -71,10 +79,22 @@ def evaluate_road(signals):
     results = {}
     for name, formula in ALL_PROPERTIES.items():
         try:
-            rho = formula.robustness(signals, t=0.0)
-            results[name] = {'robustness': round(float(rho), 4), 'satisfied': rho >= 0}
+            rho = float(formula.robustness(signals, t=0.0))
         except Exception as e:
             results[name] = {'robustness': float('nan'), 'satisfied': False}
+            continue
+
+        # Vacuous truth: an empty temporal window (e.g. P2 with a <2 s
+        # trace) returns ±inf from the STL semantics. We must not call
+        # that "satisfied" — the property was never actually evaluated.
+        # Surface it as NaN so downstream code can treat it consistently
+        # with evaluation errors and clean summaries can report it
+        # explicitly (see inf_rho_count in build_clean_summary_tables).
+        if math.isinf(rho):
+            results[name] = {'robustness': float('nan'), 'satisfied': False}
+            continue
+
+        results[name] = {'robustness': round(rho, 4), 'satisfied': rho >= 0}
     return results
 
 
@@ -126,6 +146,7 @@ def compute_analysis_metrics(df):
     cte = df['cte'].values
     speed = df['speed'].values
     steering = df['str_angle'].values
+    curvature = df['curvature'].values
 
     metrics['max_abs_cte'] = float(np.max(np.abs(cte))) if len(cte) else float('nan')
     metrics['mean_abs_cte'] = float(np.mean(np.abs(cte))) if len(cte) else float('nan')
@@ -142,7 +163,7 @@ def compute_analysis_metrics(df):
     metrics['cte_recovery_success_rate_2p5s'] = float(len(recovery_latencies) / spike_count) if spike_count else float('nan')
     metrics['cte_recovery_latency_mean_s'] = float(np.mean(recovery_latencies)) if recovery_latencies else float('nan')
     metrics['cte_recovery_latency_max_s'] = float(np.max(recovery_latencies)) if recovery_latencies else float('nan')
-  
+
     high_curv_mask = np.abs(curvature) > 0.03
     if np.any(high_curv_mask):
         metrics['mean_abs_cte_on_high_curvature'] = float(np.mean(np.abs(cte[high_curv_mask])))
@@ -201,35 +222,53 @@ def property_violation_mask(prop_name, df):
     curvature = df['curvature'].values
 
     if prop_name == 'P1_lane_keeping':
-        return np.abs(cte) >= 0.8
+        return np.abs(cte) >= P1_CTE_LIMIT
 
     if prop_name == 'P2_speed_stability':
-        return (times >= 2.0) & (speed <= 5.0)
+        return (times >= P2_WARMUP_S) & (speed <= P2_MIN_SPEED)
 
     if prop_name == 'P3_steering_smoothness':
-        return np.abs(str_angle) >= 0.7
+        return np.abs(str_angle) >= P3_STR_ANGLE_LIMIT
 
     if prop_name == 'P4_heading_alignment':
-        return (times >= 0.5) & (np.abs(hdg_err) >= 0.25)
+        return (times >= P4_INIT_SKIP_S) & (np.abs(hdg_err) >= P4_HDG_ERR_LIMIT)
 
     if prop_name == 'P5_recovery':
-        drifting = np.abs(cte) > 0.5
-        recovered = np.abs(cte) < 0.2
+        # STL spec: G( |cte|>P5_DRIFT_THRESHOLD → F[0,P5_RECOVERY_HORIZON_S](|cte|<P5_RECOVERED_THRESHOLD) )
+        # i.e. "from the moment we start drifting, we must recover within 3 s."
+        # The previous per-sample version overcounted a single continuous
+        # drift as N separate violations (one per drifting sample). This
+        # state-machine version flags the whole drift region as a single
+        # violation if no recovery happens within the recovery horizon of
+        # the drift's start, which matches the regions where P5_recovery_rho
+        # < 0 in the STL evaluation.
+        drifting = np.abs(cte) > P5_DRIFT_THRESHOLD
+        recovered = np.abs(cte) < P5_RECOVERED_THRESHOLD
         violated = np.zeros(len(df), dtype=bool)
-        for i in np.where(drifting)[0]:
-            t_end = times[i] + 3.0
-            window = (times >= times[i]) & (times <= t_end)
-            if not np.any(recovered[window]):
-                violated[i] = True
+        in_drift = False
+        drift_start_idx = None
+        for i in range(len(df)):
+            if drifting[i]:
+                if not in_drift:
+                    in_drift = True
+                    drift_start_idx = i
+                t_end = times[drift_start_idx] + P5_RECOVERY_HORIZON_S
+                window = (times >= times[drift_start_idx]) & (times <= t_end)
+                if not np.any(recovered[window]):
+                    # Mark the entire current drift region as violated.
+                    violated[drift_start_idx:i + 1] = True
+            else:
+                in_drift = False
+                drift_start_idx = None
         return violated
 
     if prop_name == 'P6_curvature_safety':
-        return (np.abs(curvature) > 0.03) & (np.abs(cte) >= 0.4)
+        return (np.abs(curvature) > P6_CURVATURE_THRESHOLD) & (np.abs(cte) >= P6_TIGHT_CTE_LIMIT)
 
     return np.zeros(len(df), dtype=bool)
 
 
-def build_violation_reports(csv_files):
+def build_violation_reports(csv_files, df_cache=None):
     """
     Create detailed and summary violation reports across roads/properties:
       - detailed: each violated segment with start/end/duration
@@ -238,14 +277,22 @@ def build_violation_reports(csv_files):
     detailed_rows = []
     summary_rows = []
 
-    for csv_path in csv_files:
+    total = len(csv_files)
+    for idx, csv_path in enumerate(csv_files, start=1):
         road_id = csv_path.stem
         try:
-            _, df = load_signals(str(csv_path))
+            cache_key = str(csv_path)
+            if df_cache is not None and cache_key in df_cache:
+                df = df_cache[cache_key]
+            else:
+                _, df = load_signals(cache_key)
             times = df['timestamp'].values
         except Exception as e:
             print(f"  [WARN] Cannot analyze violations for {csv_path.name}: {e}")
             continue
+
+        if idx % PROGRESS_EVERY == 0 or idx == total:
+            print(f"  Violation reports progress: {idx}/{total}")
 
         for prop_name in ALL_PROPERTIES:
             try:
@@ -287,17 +334,25 @@ def build_violation_reports(csv_files):
     return detailed_df, summary_df
 
 
-def build_metrics_table(csv_files):
+def build_metrics_table(csv_files, df_cache=None):
     rows = []
-    for csv_path in csv_files:
+    total = len(csv_files)
+    for idx, csv_path in enumerate(csv_files, start=1):
         road_id = csv_path.stem
         try:
-            _, df = load_signals(str(csv_path))
+            cache_key = str(csv_path)
+            if df_cache is not None and cache_key in df_cache:
+                df = df_cache[cache_key]
+            else:
+                _, df = load_signals(cache_key)
             row = {'road_id': road_id}
             row.update(compute_analysis_metrics(df))
             rows.append(row)
         except Exception as e:
             print(f"  [WARN] Metric computation failed for {csv_path.name}: {e}")
+
+        if idx % PROGRESS_EVERY == 0 or idx == total:
+            print(f"  Analysis metrics progress: {idx}/{total}")
     return pd.DataFrame(rows)
 
 
@@ -318,6 +373,12 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         rho = pd.to_numeric(results_df.get(rho_col, pd.Series(dtype=float)), errors='coerce')
         finite_rho = rho[np.isfinite(rho)]
         violated_rho = finite_rho[finite_rho < 0]
+        # `nan_rho_count` covers vacuous-truth cases (short traces where
+        # the property's temporal window is empty) and evaluation errors.
+        # `inf_rho_count` is kept for backwards compatibility with older
+        # CSVs; it should always be 0 since `evaluate_road` converts any
+        # ±inf robustness to NaN before writing the per-road results.
+        nan_count = int(rho.isna().sum()) if len(rho) else 0
         inf_count = int(np.isinf(rho).sum()) if len(rho) else 0
 
         property_rows.append({
@@ -332,6 +393,7 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
             'p95_rho_finite': float(finite_rho.quantile(0.95)) if not finite_rho.empty else float('nan'),
             'mean_rho_when_violated': float(violated_rho.mean()) if not violated_rho.empty else float('nan'),
             'p5_rho_when_violated': float(violated_rho.quantile(0.05)) if not violated_rho.empty else float('nan'),
+            'nan_rho_count': nan_count,
             'inf_rho_count': inf_count,
         })
 
@@ -355,7 +417,7 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         })
 
     metrics_summary_df = pd.DataFrame(metric_rows)
-  
+
     risk_df = violations_summary_df.copy()
     risk_df['property_weight'] = risk_df['property'].map(PROPERTY_WEIGHTS).fillna(1.0)
     risk_df['weighted_violation_duration_s'] = (
@@ -375,8 +437,8 @@ def build_clean_summary_tables(results_df, violations_summary_df, metrics_df):
         'avg_total_violation_duration_s_per_road': float(road_total['total_violation_duration_s'].mean()),
         'p95_total_violation_duration_s_per_road': float(road_total['total_violation_duration_s'].quantile(0.95)),
         'top_risk_road_id': str(road_total.iloc[0]['road_id']) if not road_total.empty else '',
-        'top_risk_weighted_risk_score': float(road_total.iloc[0]['weighted_risk_score']) if not road_total.empty else float('nan'),
         'top_risk_total_violation_duration_s': float(road_total.iloc[0]['total_violation_duration_s']) if not road_total.empty else float('nan'),
+        'top_risk_weighted_risk_score': float(road_total.iloc[0]['weighted_risk_score']) if not road_total.empty else float('nan'),
     }])
 
     top_risk_roads_df = road_total.head(20).reset_index(drop=True)
@@ -547,8 +609,8 @@ def plot_robustness_traces(csv_path, output_dir, road_id):
 
 def main():
     parser = argparse.ArgumentParser(description='ADS STL Monitor')
-    parser.add_argument('--data_dir',    default='/Users/ali/Documents/GitHub/udacity-test-generation/SensoDat/dynamic_data/a2')
-    parser.add_argument('--output_dir',  default='/Users/ali/Documents/GitHub/udacity-test-generation/STL_Monitor_for_ADS_Behavior/results/d/a2')
+    parser.add_argument('--data_dir',    default='./data')
+    parser.add_argument('--output_dir',  default='./results')
     parser.add_argument('--max_roads',   type=int, default=None)
     parser.add_argument('--trace_roads', nargs='*', default=[])
     parser.add_argument('--recursive', action='store_true',
@@ -558,6 +620,7 @@ def main():
     os.makedirs(args.output_dir, exist_ok=True)
     script_dir = Path(__file__).resolve().parent
     fallback_data_dir = script_dir.parent / 'SensoDat' / 'dynamic_data'
+    fallback_data_dir_a2 = fallback_data_dir / 'a2'
     selected_data_dir = args.data_dir
     print(f"\n{'='*55}\n  ADS STL Monitor | data={selected_data_dir}\n{'='*55}\n")
 
@@ -565,9 +628,14 @@ def main():
 
     # If user runs with defaults and ./data is empty, auto-fallback to repo dataset.
     if not csv_files and args.data_dir == './data' and fallback_data_dir.exists():
-        selected_data_dir = str(fallback_data_dir)
-        print(f"  [INFO] No CSVs in ./data. Falling back to: {selected_data_dir}")
-        csv_files = find_csv_files(selected_data_dir, recursive=True)
+        if fallback_data_dir_a2.exists():
+            selected_data_dir = str(fallback_data_dir_a2)
+            print(f"  [INFO] No CSVs in ./data. Falling back to: {selected_data_dir}")
+            csv_files = find_csv_files(selected_data_dir, recursive=False)
+        else:
+            selected_data_dir = str(fallback_data_dir)
+            print(f"  [INFO] No CSVs in ./data. Falling back to: {selected_data_dir}")
+            csv_files = find_csv_files(selected_data_dir, recursive=True)
 
     if args.max_roads:
         csv_files = csv_files[:args.max_roads]
@@ -584,10 +652,13 @@ def main():
 
     print("Evaluating STL properties...")
     rows = []
-    for csv_path in csv_files:
+    df_cache = {}
+    total = len(csv_files)
+    for idx, csv_path in enumerate(csv_files, start=1):
         road_id = csv_path.stem
         try:
-            signals, _ = load_signals(str(csv_path))
+            signals, road_df = load_signals(str(csv_path))
+            df_cache[str(csv_path)] = road_df
             res = evaluate_road(signals)
             row = {'road_id': road_id}
             for p, v in res.items():
@@ -596,14 +667,17 @@ def main():
             rows.append(row)
         except Exception as e:
             print(f"  [WARN] Skipping {csv_path.name}: {e}")
+
+        if idx % PROGRESS_EVERY == 0 or idx == total:
+            print(f"  STL evaluation progress: {idx}/{total}")
     df = pd.DataFrame(rows)
 
     if df.empty:
         print("No roads evaluated. Check --data_dir."); return
 
     print("\nBuilding detailed violation timing reports...")
-    detailed_df, summary_df = build_violation_reports(csv_files)
-    metrics_df = build_metrics_table(csv_files)
+    detailed_df, summary_df = build_violation_reports(csv_files, df_cache=df_cache)
+    metrics_df = build_metrics_table(csv_files, df_cache=df_cache)
 
     if not metrics_df.empty:
         df = df.merge(metrics_df, on='road_id', how='left')
