@@ -1,6 +1,6 @@
-# ADS-STL-Monitor
+# ADS-Signal Temporal Logic (STL)-Monitor
 
-**Runtime verification of Autonomous Driving agent behavior using Signal Temporal Logic (STL)**
+**Runtime Verification and Safety Assurance Framework for Autonomous Systems using**
 
 This project is an offline STL robustness monitor over simulation
 traces originally collected for [*Coverage-Guided Road Selection and
@@ -12,8 +12,7 @@ mapping scenario-based ADS testing outcomes to STL robustness and
 bridging simulation-driven V&V with formal specification-based
 evaluation.
 
-This project
-extends the same campaign with a formal runtime-verification layer:
+This project extends the same campaign with a formal runtime-verification layer:
 
 1. **Specification layer** — encode expected ADS behavior as STL
    formulas over measured signals (speed, CTE, steering, heading,
