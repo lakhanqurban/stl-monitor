@@ -12,12 +12,7 @@ mapping scenario-based ADS testing outcomes to STL robustness and
 bridging simulation-driven V&V with formal specification-based
 evaluation.
 
----
-
-## Data Source
-
-The source traces come from a study whose primary goal was efficient
-scenario selection and fault-revealing test execution. This project
+This project
 extends the same campaign with a formal runtime-verification layer:
 
 1. **Specification layer** — encode expected ADS behavior as STL
@@ -82,20 +77,13 @@ The runner evaluates six STL properties and a set of derived metrics:
 | `P5_recovery` | Recovery property: if `abs(cte) > 0.5`, return to `abs(cte) < 0.2` within 3 s |
 | `P6_curvature_safety` | Curvature property: if `abs(curv) > 0.03`, keep `abs(cte) < 0.4` |
 | `max_abs_cte` | Worst absolute cross-track error on the road |
-| `mean_abs_cte` | Average absolute cross-track error |
 | `cte_boundary_violation_rate` | Fraction of samples with `abs(cte) >= 1.5` |
-| `cte_near_boundary_rate` | Fraction of samples with `abs(cte) >= 1.0` |
 | `cte_spike_count_gt_1p0` | Number of contiguous `abs(cte) > 1.0` spikes |
 | `cte_recovery_count_within_2p5s` | Number of spikes that recover within 2.5 s |
-| `cte_recovery_success_rate_2p5s` | Fraction of spikes that recover within 2.5 s |
-| `cte_recovery_latency_mean_s` | Mean recovery latency for recovered spikes |
-| `cte_recovery_latency_max_s` | Maximum recovery latency for recovered spikes |
 | `mean_abs_cte_on_high_curvature` | Mean absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
 | `max_abs_cte_on_high_curvature` | Maximum absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
 | `steering_jerk_rate_0p1` | Fraction of steering changes with `abs(Δsteering) >= 0.1` |
 | `mean_abs_steering_delta` | Mean absolute steering change between samples |
-| `speed_over_threshold_rate` | Fraction of samples with `speed >= 30` |
-| `mean_abs_throttle_delta` | Mean absolute throttle change, if throttle exists |
 | `throttle_jerk_rate_0p2` | Fraction of throttle changes with `abs(Δthrottle) >= 0.2`, if throttle exists |
 
 ---
@@ -161,8 +149,6 @@ python main.py --num-episodes 10 --stl-live-view html
 # Run with both (recommended for full observability)
 python main.py --num-episodes 10 --stl-live-view both
 
-# Disable real-time STL monitoring if needed
-python main.py --num-episodes 10 --disable-real-time-stl
 ```
 
 #### Real-Time CLI Flags
@@ -216,8 +202,6 @@ self-contained in [`stl_monitor.py`](./stl_monitor.py).
 | `realtime_alerts.csv` | append-only | violation transitions (when ρ crosses 0) |
 | `realtime_episode_summary.csv` | append-only | per-episode verdict and max violation counts |
 | `realtime_dashboard.html` | live HTML | auto-refreshing browser dashboard with plots |
-| `logs/.../chauffeur_all/output_*.csv` | simulation logs | standard run telemetry + episode metadata |
-| `logs/.../chauffeur_all/episodes/*.csv` | per-road analysis | detailed curvature and CTE traces per road |
 
 `results.csv` and the summary CSVs are the main artifacts for
 offline analysis. The real-time CSV streams and HTML dashboard provide
@@ -259,21 +243,6 @@ in `./results`.
 | `cte_near_boundary_rate` | 0.0238 | 0.0088 | 0.0933 |
 | `steering_jerk_rate_0p1` | 0.0085 | 0.0074 | 0.0208 |
 | `cte_recovery_success_rate_2p5s` | 0.5338 | 0.5000 | 1.0000 |
-
----
-
-## Notes
-
-- **Vacuous truth.** `P2_speed_stability` uses `G[2,∞]` and
-  `P4_heading_alignment` uses `G[0.5,∞]`. On traces shorter than the
-  lower bound of these windows, the STL semantics return `±inf`. The
-  runner converts any `±inf` to `NaN` in the per-road `*_rho` columns
-  and marks the corresponding `*_ok` as `False` — vacuous truth is
-  **not** a real satisfaction verdict. These cases are tallied in
-  `nan_rho_count` in `summary_properties_clean.csv`.
-- **Outliers.** `max_abs_cte` has a strong outlier (61.287); use
-  `winsorized_mean_1_99` in `summary_metrics_clean.csv` for robust
-  aggregate reporting.
 
 ---
 
