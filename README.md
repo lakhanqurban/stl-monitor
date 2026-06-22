@@ -14,7 +14,7 @@ evaluation.
 
 ---
 
-## Why this exists
+## Data Source
 
 The source traces come from a study whose primary goal was efficient
 scenario selection and fault-revealing test execution. This project
@@ -183,7 +183,7 @@ self-contained in [`stl_monitor.py`](./stl_monitor.py).
 
 ## Real-Time Monitoring Demo
 
-![Real-time STL dashboard showing live property evaluation during ADS simulation](./demo_realtime_stl.gif)
+![Real-time STL dashboard showing live property evaluation during ADS simulation](./real_time_results/demo_realtime_stl.gif)
 
 *Real-time STL verification with live terminal alerts and auto-refreshing HTML dashboard. The dashboard displays per-step robustness scores (ρ) and violation status for all six STL properties as the agent drives.*
 

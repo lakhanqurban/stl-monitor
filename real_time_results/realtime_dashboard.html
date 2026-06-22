@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <meta http-equiv='refresh' content='2'>
+  <title>Real-Time STL Dashboard</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 24px; background: #f7f8fa; color: #1f2328; }
+    h1 { margin-bottom: 6px; }
+    .sub { color: #57606a; margin-top: 0; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background: #fff; border: 1px solid #d0d7de; border-radius: 10px; padding: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th, td { border-bottom: 1px solid #d8dee4; padding: 6px 8px; text-align: left; }
+    th { background: #f6f8fa; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  </style>
+</head>
+<body>
+  <h1>Real-Time STL Dashboard</h1>
+  <p class='sub'>Auto-refresh every 2s | Output dir: stl_monitor/real_time_results</p>
+
+  <div class='card'>
+    <h3>Current Episode</h3>
+    <p class='mono'>episode_idx=- road_id=- steps=98</p>
+  </div>
+
+  <div class='card'><h3>Last Episode Summary</h3><p>Episode: 4 | Road: 552</p><p>Violated Properties: 4 | Pending: 0 | Success: 0</p></div>
+
+  <div class='grid'>
+    <div class='card'>
+      <h3>Current STL Property Status</h3>
+      <table>
+        <thead><tr><th>Property</th><th>Robustness (rho)</th><th>Status</th></tr></thead>
+        <tbody><tr><td>P1_lane_keeping</td><td>-2.2699</td><td style='color:#b42318;font-weight:700'>violated</td></tr><tr><td>P2_speed_stability</td><td>20.63776</td><td style='color:#1a7f37;font-weight:700'>satisfied</td></tr><tr><td>P3_steering_smoothness</td><td>-0.0869</td><td style='color:#b42318;font-weight:700'>violated</td></tr><tr><td>P4_heading_alignment</td><td>-0.35304</td><td style='color:#b42318;font-weight:700'>violated</td></tr><tr><td>P5_recovery</td><td>-2.7699</td><td style='color:#b42318;font-weight:700'>violated</td></tr><tr><td>P6_curvature_safety</td><td>0.00164</td><td style='color:#1a7f37;font-weight:700'>satisfied</td></tr></tbody>
+      </table>
+    </div>
+
+    <div class='card'>
+      <h3>Recent Telemetry (Last 30 Rows)</h3>
+      <table>
+        <thead><tr><th>Wall Time</th><th>Ep</th><th>Road</th><th>Sim t</th><th>Speed</th><th>CTE</th></tr></thead>
+        <tbody><tr><td>2026-06-22 17:46:26</td><td>4</td><td>552</td><td>7.03031</td><td>30.99816</td><td>-0.249</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.24717</td><td>31.04316</td><td>0.0155</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.41272</td><td>31.06764</td><td>0.2695</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.5563</td><td>30.63348</td><td>0.4163</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.66183</td><td>30.456</td><td>0.6573</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.76391</td><td>30.73428</td><td>0.782</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.82892</td><td>30.61872</td><td>0.8294</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.90253</td><td>29.97252</td><td>0.887</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>7.96381</td><td>29.96604</td><td>0.9485</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>8.01988</td><td>29.12796</td><td>0.9528</td></tr><tr><td>2026-06-22 17:46:27</td><td>4</td><td>552</td><td>8.0801</td><td>28.93716</td><td>0.9529</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.13995</td><td>29.3418</td><td>0.9334</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.20903</td><td>29.20968</td><td>0.9065</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.28873</td><td>28.21428</td><td>0.8247</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.37312</td><td>28.57176</td><td>0.6984</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.44169</td><td>27.75348</td><td>0.6072</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.52521</td><td>28.2762</td><td>0.4398</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.61487</td><td>27.783</td><td>0.3335</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.72083</td><td>28.62108</td><td>0.0851</td></tr><tr><td>2026-06-22 17:46:28</td><td>4</td><td>552</td><td>8.99906</td><td>29.00304</td><td>-0.2942</td></tr><tr><td>2026-06-22 17:46:29</td><td>4</td><td>552</td><td>9.14244</td><td>29.91348</td><td>-0.4586</td></tr><tr><td>2026-06-22 17:46:29</td><td>4</td><td>552</td><td>9.29197</td><td>30.2382</td><td>-0.5772</td></tr><tr><td>2026-06-22 17:46:29</td><td>4</td><td>552</td><td>9.40062</td><td>29.91528</td><td>-0.5948</td></tr><tr><td>2026-06-22 17:46:29</td><td>4</td><td>552</td><td>9.52311</td><td>30.39624</td><td>-0.5447</td></tr><tr><td>2026-06-22 17:46:29</td><td>4</td><td>552</td><td>9.9857</td><td>29.92032</td><td>-0.1834</td></tr><tr><td>2026-06-22 17:46:30</td><td>4</td><td>552</td><td>10.19325</td><td>30.57048</td><td>1.2941</td></tr><tr><td>2026-06-22 17:46:30</td><td>4</td><td>552</td><td>10.36643</td><td>30.02868</td><td>1.9047</td></tr><tr><td>2026-06-22 17:46:30</td><td>4</td><td>552</td><td>10.5179</td><td>29.37492</td><td>2.6076</td></tr><tr><td>2026-06-22 17:46:30</td><td>4</td><td>552</td><td>10.61094</td><td>29.29644</td><td>2.9683</td></tr><tr><td>2026-06-22 17:46:30</td><td>4</td><td>552</td><td>10.72314</td><td>28.58148</td><td>3.2699</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</body>
+</html>
