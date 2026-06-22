@@ -35,6 +35,40 @@ For a deeper walkthrough of how the code is structured, see
 
 ---
 
+## Two Monitoring Modes
+
+### 1. **Offline Analysis** (Post-hoc)
+Evaluate completed simulation traces from CSV files:
+- Full corpus processing (100s–1000s of roads)
+- Comprehensive violation timing and recovery analysis
+- Aggregate statistical summaries and heatmaps
+- Publication-ready reports
+
+```bash
+python runner.py --data_dir ./dynamic_data --recursive --output_dir ./results
+```
+
+### 2. **Real-Time Verification** (Live)
+*(New)* Evaluate STL properties during simulation execution:
+- Per-step robustness computation as the agent drives
+- Live terminal alerts on property violations
+- Auto-opening HTML dashboard with live updates
+- Structured CSV logging (stream, alerts, episode summary)
+- Outputs saved under `stl_monitor/{logs,real_time_results}`
+
+```bash
+# Terminal view only
+python ../main.py --stl-live-view terminal
+
+# HTML dashboard auto-opens in browser
+python ../main.py --stl-live-view html
+
+# Both terminal and browser (recommended)
+python ../main.py --stl-live-view both
+```
+
+---
+
 ## Properties
 
 The runner evaluates six STL properties and a set of derived metrics:
@@ -95,24 +129,68 @@ the formal equations and the per-class rule mapping, see
 
 ## Installation & quick start
 
+### Prerequisites
+
 ```bash
 pip install pandas numpy matplotlib
 ```
 
-Then evaluate a folder of scenario CSVs:
+### Offline Analysis (Historical Traces)
+
+Evaluate a folder of scenario CSVs:
 
 ```bash
 # Recursively evaluate scenario folders (e.g. dynamic_data/a*/**/*.csv)
 python runner.py --data_dir ./dynamic_data --recursive --output_dir ./results
 ```
 
+### Real-Time Monitoring (Live Simulation)
+
+Run the main simulation with STL live verification:
+
+```bash
+# From parent directory
+cd ..
+
+# Run with terminal STL output
+python main.py --num-episodes 10 --stl-live-view terminal
+
+# Run with auto-opening HTML dashboard
+python main.py --num-episodes 10 --stl-live-view html
+
+# Run with both (recommended for full observability)
+python main.py --num-episodes 10 --stl-live-view both
+
+# Disable real-time STL monitoring if needed
+python main.py --num-episodes 10 --disable-real-time-stl
+```
+
+#### Real-Time CLI Flags
+
+| Flag | Values | Default | Purpose |
+|------|--------|---------|----------|
+| `--stl-live-view` | `terminal` \| `html` \| `both` | `both` | How to display real-time STL results |
+| `--stl-print-every` | integer | `25` | Print terminal summary every N steps |
+| `--stl-html-refresh-steps` | integer | `25` | Refresh HTML dashboard every N steps |
+| `--stl-alert-threshold` | float | `0.0` | Robustness threshold for violation alerts (ρ < threshold) |
+| `--stl-no-auto-open-dashboard` | flag | not set | Do not auto-open HTML dashboard in browser |
+| `--disable-real-time-stl` | flag | not set | Disable real-time STL monitoring entirely |
+
 The implementation has no external STL dependency — the semantics are
 self-contained in [`stl_monitor.py`](./stl_monitor.py).
 
 ---
 
-## Outputs
+## Real-Time Monitoring Demo
 
+![Real-time STL dashboard showing live property evaluation during ADS simulation](./demo_realtime_stl.gif)
+
+*Real-time STL verification with live terminal alerts and auto-refreshing HTML dashboard. The dashboard displays per-step robustness scores (ρ) and violation status for all six STL properties as the agent drives.*
+
+---
+
+## Outputs
+### Offline Analysis Outputs
 | File | Format | Content |
 |------|--------|---------|
 | `results.csv` | one row per road | per-property `*_rho` and `*_ok`, plus all derived metrics |
@@ -128,8 +206,22 @@ self-contained in [`stl_monitor.py`](./stl_monitor.py).
 | `analysis_metrics_heatmap.png` | plot | normalized heatmap of the analysis metrics across roads |
 | `trace_road_<id>.png` | plot (optional) | per-time-step robustness trace for a selected road |
 
-`results.csv` and the summary CSVs are the main artifacts used for
-analysis. The PNGs are generated automatically for visual inspection.
+### Real-Time Monitoring Outputs
+
+*Saved under `stl_monitor/real_time_results/` and `stl_monitor/logs/`:*
+
+| File | Format | Content |
+|------|--------|----------|
+| `realtime_stream.csv` | append-only | per-step signal values and robustness scores |
+| `realtime_alerts.csv` | append-only | violation transitions (when ρ crosses 0) |
+| `realtime_episode_summary.csv` | append-only | per-episode verdict and max violation counts |
+| `realtime_dashboard.html` | live HTML | auto-refreshing browser dashboard with plots |
+| `logs/.../chauffeur_all/output_*.csv` | simulation logs | standard run telemetry + episode metadata |
+| `logs/.../chauffeur_all/episodes/*.csv` | per-road analysis | detailed curvature and CTE traces per road |
+
+`results.csv` and the summary CSVs are the main artifacts for
+offline analysis. The real-time CSV streams and HTML dashboard provide
+live insights during simulation; the PNGs are generated automatically for visual inspection.
 
 ---
 
