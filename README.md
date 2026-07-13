@@ -1,6 +1,6 @@
-# ADS-STL-Monitor
+# ADS-Signal Temporal Logic (STL)-Monitor
 
-**Runtime verification of Autonomous Driving agent behavior using Signal Temporal Logic (STL)**
+**Runtime Verification and Safety Assurance Framework for Autonomous Systems using**
 
 This project is an offline STL robustness monitor over simulation
 traces originally collected for [*Coverage-Guided Road Selection and
@@ -12,17 +12,7 @@ mapping scenario-based ADS testing outcomes to STL robustness and
 bridging simulation-driven V&V with formal specification-based
 evaluation.
 
-## Problem
-
-Scenario-based ADS testing can reveal that a drive passed or failed,
-but it does not by itself specify *which temporal safety requirement*
-was breached, when the breach occurred, how long it lasted, or how far
-the agent was from satisfying the requirement. This project addresses
-that gap by evaluating measured driving signals against Signal
-Temporal Logic (STL) specifications and producing a quantitative
-robustness score for every scenario.
-
-It provides a formal runtime-verification layer that:
+This project extends the same campaign with a formal runtime-verification layer:
 
 1. **Specification layer** — encode expected ADS behavior as STL
    formulas over measured signals (speed, CTE, steering, heading,
@@ -34,26 +24,8 @@ It provides a formal runtime-verification layer that:
    violation duration, recovery behavior, and aggregate summaries
    over the full scenario corpus.
 
-## Architecture
-
-The monitor supports the same evaluation pipeline for stored traces
-and for signals received while a simulation is running.
-
-```mermaid
-flowchart LR
-    A["ADS simulator<br/>or scenario CSV traces"] --> B["Signal extraction<br/>timestamp, speed, CTE, steering,<br/>heading error, curvature"]
-    B --> C["STL property suite<br/>P1–P6"]
-    C --> D["Quantitative STL monitor<br/>robustness ρ"]
-    D --> E["Violation and recovery<br/>analysis"]
-    E --> F["Offline: CSV reports<br/>and PNG plots"]
-    D --> G["Live: terminal alerts,<br/>CSV stream, HTML dashboard"]
-```
-
-Core modules: [`stl_monitor.py`](./stl_monitor.py) implements STL
-signals, formulas, and robustness semantics; [`ads_properties.py`](./ads_properties.py)
-defines the six ADS properties; [`runner.py`](./runner.py) performs
-offline batch analysis; and [`realtime_monitor.py`](./realtime_monitor.py)
-records and presents live monitor results.
+For a deeper walkthrough of how the code is structured, see
+[`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 
@@ -97,12 +69,12 @@ The runner evaluates six STL properties and a set of derived metrics:
 
 | Metric | Meaning |
 |--------|---------|
-| `P1_lane_keeping` | Lane-keeping property: `abs(cte) < 1.0`, with a 0.5 s sustained-violation filter |
+| `P1_lane_keeping` | Lane-keeping property: `abs(cte) < 0.8` |
 | `P2_speed_stability` | Speed property: `speed > 5` after a 2 s warm-up |
-| `P3_steering_smoothness` | Steering property: `abs(str_angle) < 0.75`, with a 0.5 s sustained-violation filter |
+| `P3_steering_smoothness` | Steering property: `abs(str_angle) < 0.7` |
 | `P4_heading_alignment` | Heading property: `abs(hdg_err) < 0.25` after 0.5 s |
-| `P5_recovery` | Recovery property: if `abs(cte) > 0.5`, return to `abs(cte) < 0.35` within 5 s |
-| `P6_curvature_safety` | Curvature property: if `abs(curvature) > 0.05`, keep `abs(cte) < 0.6` |
+| `P5_recovery` | Recovery property: if `abs(cte) > 0.5`, return to `abs(cte) < 0.2` within 3 s |
+| `P6_curvature_safety` | Curvature property: if `abs(curv) > 0.03`, keep `abs(cte) < 0.4` |
 | `max_abs_cte` | Worst absolute cross-track error on the road |
 | `cte_boundary_violation_rate` | Fraction of samples with `abs(cte) >= 1.5` |
 | `cte_spike_count_gt_1p0` | Number of contiguous `abs(cte) > 1.0` spikes |
@@ -131,62 +103,33 @@ building blocks: a single check against a threshold (e.g.
 `implies`), and the temporal operators `G` (must hold throughout a
 time window) and `F` (must hold at least once in a time window).
 They compose in the usual way — for example, P5's "if we drift, we
-must recover within 5 s" is written as
-`G( drifting → F[0,5](recovered) )` — and the implementation in
+must recover within 3 s" is written as
+`G( drifting → F[0,3](recovered) )` — and the implementation in
 [`stl_monitor.py`](./stl_monitor.py) walks the resulting formula
 tree once to produce the full robustness number in a single call.
 
-The full quantitative semantics follow Donzé & Maler (2010).
+The full quantitative semantics follow Donzé & Maler (2010); for
+the formal equations and the per-class rule mapping, see
+[`ARCHITECTURE.md`](./ARCHITECTURE.md#stl-semantics-full-reference).
 
-## Algorithms and libraries
+---
 
-The monitor uses the following approach and dependencies:
-
-- **Quantitative STL robustness monitoring:** evaluates predicates,
-  Boolean connectives, and the `G` (globally) and `F` (eventually)
-  temporal operators over timestamped signals.
-- **Violation-segment and recovery analysis:** finds contiguous
-  violation intervals, measures their duration, and computes recovery
-  metrics and weighted road-level risk summaries.
-- **NumPy:** numerical arrays and signal calculations.
-- **pandas:** CSV loading, tabular analysis, and report generation.
-- **Matplotlib:** offline heatmaps, bar charts, and robustness traces.
-- **Python standard library:** command-line parsing, CSV output, and
-  live HTML dashboard generation. No external STL library is used.
-
-## Setup and run
+## Installation & quick start
 
 ### Prerequisites
 
-Use Python 3.9 or newer. Create and activate an isolated environment:
-
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+pip install pandas numpy matplotlib
 ```
 
 ### Offline Analysis (Historical Traces)
 
-Evaluate the included sample traces first:
-
-```bash
-python runner.py --data_dir ./sample_data --output_dir ./results
-```
-
-To evaluate a full corpus, point `--data_dir` to a directory of CSV
-traces and add `--recursive` when traces are stored in subdirectories:
+Evaluate a folder of scenario CSVs:
 
 ```bash
 # Recursively evaluate scenario folders (e.g. dynamic_data/a*/**/*.csv)
 python runner.py --data_dir ./dynamic_data --recursive --output_dir ./results
 ```
-
-Each trace must contain a `timestamp` column and the signals used by
-the property suite: `speed`, `cte`, `str_angle`, `hdg_err`, and
-`curvature`. The optional `throttle` column enables throttle-jerk
-metrics. See [`sample_data/0.csv`](./sample_data/0.csv) for the input
-format.
 
 ### Real-Time Monitoring (Live Simulation)
 
@@ -206,10 +149,6 @@ python main.py --num-episodes 10 --stl-live-view html
 python main.py --num-episodes 10 --stl-live-view both
 
 ```
-
-Live monitoring is integrated with the simulator project's `main.py`,
-which is expected in the parent directory. The standalone repository
-can run offline analysis without that project.
 
 #### Real-Time CLI Flags
 
