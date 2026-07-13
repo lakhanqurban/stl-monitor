@@ -1,6 +1,6 @@
-# ADS-STL-Monitor
+# 🚗 ADS STL Monitor
 
-**Runtime verification of Autonomous Driving agent behavior using Signal Temporal Logic (STL)**
+> Runtime verification for autonomous-driving simulations using Signal Temporal Logic (STL).
 
 This project is an offline STL robustness monitor over simulation
 traces originally collected for [*Coverage-Guided Road Selection and
@@ -12,7 +12,7 @@ mapping scenario-based ADS testing outcomes to STL robustness and
 bridging simulation-driven V&V with formal specification-based
 evaluation.
 
-## Problem
+## 🎯 Problem
 
 Scenario-based ADS testing can reveal that a drive passed or failed,
 but it does not by itself specify *which temporal safety requirement*
@@ -22,7 +22,7 @@ that gap by evaluating measured driving signals against Signal
 Temporal Logic (STL) specifications and producing a quantitative
 robustness score for every scenario.
 
-It provides a formal runtime-verification layer that:
+The monitor provides:
 
 1. **Specification layer** — encode expected ADS behavior as STL
    formulas over measured signals (speed, CTE, steering, heading,
@@ -34,7 +34,7 @@ It provides a formal runtime-verification layer that:
    violation duration, recovery behavior, and aggregate summaries
    over the full scenario corpus.
 
-## Architecture
+## 🏗️ Architecture
 
 The monitor supports the same evaluation pipeline for stored traces
 and for signals received while a simulation is running.
@@ -57,26 +57,21 @@ records and presents live monitor results.
 
 ---
 
-## Two Monitoring Modes
+## ⚙️ Monitoring modes
 
-### 1. **Offline Analysis** (Post-hoc)
-Evaluate completed simulation traces from CSV files:
-- Full corpus processing (100s–1000s of roads)
-- Comprehensive violation timing and recovery analysis
-- Aggregate statistical summaries and heatmaps
-- Publication-ready reports
+### 📁 Offline analysis
+
+Evaluate completed CSV traces to produce per-road robustness scores,
+violation timing, summary tables, and plots.
 
 ```bash
 python runner.py --data_dir ./dynamic_data --recursive --output_dir ./results
 ```
 
-### 2. **Real-Time Verification** (Live)
-*(New)* Evaluate STL properties during simulation execution:
-- Per-step robustness computation as the agent drives
-- Live terminal alerts on property violations
-- Auto-opening HTML dashboard with live updates
-- Structured CSV logging (stream, alerts, episode summary)
-- Outputs saved under `stl_monitor/{logs,real_time_results}`
+### 📡 Real-time verification
+
+Evaluate properties while the simulator runs, with terminal alerts,
+CSV logging, and an auto-refreshing HTML dashboard.
 
 ```bash
 # Terminal view only
@@ -91,9 +86,9 @@ python ../main.py --stl-live-view both
 
 ---
 
-## Properties
+## 🛡️ STL property suite
 
-The runner evaluates six STL properties and a set of derived metrics:
+The monitor evaluates six temporal safety and performance properties:
 
 | Metric | Meaning |
 |--------|---------|
@@ -103,19 +98,11 @@ The runner evaluates six STL properties and a set of derived metrics:
 | `P4_heading_alignment` | Heading property: `abs(hdg_err) < 0.25` after 0.5 s |
 | `P5_recovery` | Recovery property: if `abs(cte) > 0.5`, return to `abs(cte) < 0.35` within 5 s |
 | `P6_curvature_safety` | Curvature property: if `abs(curvature) > 0.05`, keep `abs(cte) < 0.6` |
-| `max_abs_cte` | Worst absolute cross-track error on the road |
-| `cte_boundary_violation_rate` | Fraction of samples with `abs(cte) >= 1.5` |
-| `cte_spike_count_gt_1p0` | Number of contiguous `abs(cte) > 1.0` spikes |
-| `cte_recovery_count_within_2p5s` | Number of spikes that recover within 2.5 s |
-| `mean_abs_cte_on_high_curvature` | Mean absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
-| `max_abs_cte_on_high_curvature` | Maximum absolute CTE on high-curvature samples (`abs(curvature) > 0.03`) |
-| `steering_jerk_rate_0p1` | Fraction of steering changes with `abs(Δsteering) >= 0.1` |
-| `mean_abs_steering_delta` | Mean absolute steering change between samples |
-| `throttle_jerk_rate_0p2` | Fraction of throttle changes with `abs(Δthrottle) >= 0.2`, if throttle exists |
 
----
+Additional derived metrics, including CTE spikes, recovery rates, and
+steering/throttle jerk, are written to the offline analysis reports.
 
-## STL semantics (brief)
+### How verdicts work
 
 Each property is evaluated as a robustness score `ρ` — a single real
 number summarizing how strongly the property is satisfied on a given
@@ -125,36 +112,22 @@ trace. The sign is the verdict:
 - `ρ < 0` → violated (the more negative, the worse)
 - `ρ = 0` → right on the boundary
 
-The formulas in our property suite are built from three small
-building blocks: a single check against a threshold (e.g.
-`|cte| < 0.8`), the usual boolean connectives (`AND`, `OR`, `NOT`,
-`implies`), and the temporal operators `G` (must hold throughout a
-time window) and `F` (must hold at least once in a time window).
-They compose in the usual way — for example, P5's "if we drift, we
-must recover within 5 s" is written as
-`G( drifting → F[0,5](recovered) )` — and the implementation in
-[`stl_monitor.py`](./stl_monitor.py) walks the resulting formula
-tree once to produce the full robustness number in a single call.
+Properties combine threshold predicates with Boolean logic and `G`
+(globally) / `F` (eventually) temporal operators. For example, P5 is
+`G(drifting → F[0,5](recovered))`: every drift must recover within five
+seconds.
 
 The full quantitative semantics follow Donzé & Maler (2010).
 
-## Algorithms and libraries
+## 🧠 Approach and libraries
 
-The monitor uses the following approach and dependencies:
+The project uses quantitative STL robustness monitoring plus
+violation-segment and recovery analysis. It is implemented with
+**NumPy**, **pandas**, **Matplotlib**, and the Python standard library;
+the STL semantics are implemented locally—no external STL library is
+required.
 
-- **Quantitative STL robustness monitoring:** evaluates predicates,
-  Boolean connectives, and the `G` (globally) and `F` (eventually)
-  temporal operators over timestamped signals.
-- **Violation-segment and recovery analysis:** finds contiguous
-  violation intervals, measures their duration, and computes recovery
-  metrics and weighted road-level risk summaries.
-- **NumPy:** numerical arrays and signal calculations.
-- **pandas:** CSV loading, tabular analysis, and report generation.
-- **Matplotlib:** offline heatmaps, bar charts, and robustness traces.
-- **Python standard library:** command-line parsing, CSV output, and
-  live HTML dashboard generation. No external STL library is used.
-
-## Setup and run
+## 🚀 Setup and run
 
 ### Prerequisites
 
@@ -166,7 +139,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### Offline Analysis (Historical Traces)
+### 1. Run offline analysis
 
 Evaluate the included sample traces first:
 
@@ -188,7 +161,7 @@ the property suite: `speed`, `cte`, `str_angle`, `hdg_err`, and
 metrics. See [`sample_data/0.csv`](./sample_data/0.csv) for the input
 format.
 
-### Real-Time Monitoring (Live Simulation)
+### 2. Run real-time monitoring
 
 Run the main simulation with STL live verification:
 
@@ -211,7 +184,8 @@ Live monitoring is integrated with the simulator project's `main.py`,
 which is expected in the parent directory. The standalone repository
 can run offline analysis without that project.
 
-#### Real-Time CLI Flags
+<details>
+<summary><strong>Real-time CLI options</strong></summary>
 
 | Flag | Values | Default | Purpose |
 |------|--------|---------|----------|
@@ -222,12 +196,9 @@ can run offline analysis without that project.
 | `--stl-no-auto-open-dashboard` | flag | not set | Do not auto-open HTML dashboard in browser |
 | `--disable-real-time-stl` | flag | not set | Disable real-time STL monitoring entirely |
 
-The implementation has no external STL dependency — the semantics are
-self-contained in [`stl_monitor.py`](./stl_monitor.py).
+</details>
 
----
-
-## Real-Time Monitoring Demo
+## 🖥️ Live dashboard
 
 ![Real-time STL dashboard showing live property evaluation during ADS simulation](./real_time_results/demo_realtime_stl.gif)
 
@@ -235,26 +206,21 @@ self-contained in [`stl_monitor.py`](./stl_monitor.py).
 
 ---
 
-## Outputs
-### Offline Analysis Outputs
+## 📦 Outputs
+
+### Offline analysis
+
 | File | Format | Content |
 |------|--------|---------|
 | `results.csv` | one row per road | per-property `*_rho` and `*_ok`, plus all derived metrics |
 | `violations_detailed.csv` | one row per violation segment | `road_id`, `property`, `segment_id`, `start_time_s`, `end_time_s`, `duration_s` |
 | `violations_summary.csv` | one row per (road, property) | `violated`, `violation_segments`, `total_violation_duration_s` |
-| `analysis_metrics.csv` | one row per road | the full set of analysis metrics |
-| `summary_overall_clean.csv` | one row | global summary (roads evaluated, p95 risk, top-risk road, weighted risk score) |
-| `summary_properties_clean.csv` | one row per property | violation rates, duration stats, finite-ρ stats, `nan`/`inf` counts |
-| `summary_metrics_clean.csv` | one row per analysis metric | mean / median / p95 / max / winsorized mean |
-| `summary_top_risk_roads.csv` | top 20 roads | ranked by weighted risk score |
-| `heatmap.png` | plot | per-road robustness heatmap for all six STL properties |
-| `violation_rates.png` | plot | bar chart of per-property violation rate |
-| `analysis_metrics_heatmap.png` | plot | normalized heatmap of the analysis metrics across roads |
-| `trace_road_<id>.png` | plot (optional) | per-time-step robustness trace for a selected road |
+| `summary_*.csv` | summary tables | aggregate property, metric, and risk summaries |
+| `*.png` | plots | robustness heatmaps, violation rates, and selected road traces |
 
-### Real-Time Monitoring Outputs
+### Real-time monitoring
 
-*Saved under `stl_monitor/real_time_results/` and `stl_monitor/logs/`:*
+The following files are written to the live monitor's configured output directory:
 
 | File | Format | Content |
 |------|--------|----------|
@@ -263,50 +229,7 @@ self-contained in [`stl_monitor.py`](./stl_monitor.py).
 | `realtime_episode_summary.csv` | append-only | per-episode verdict and max violation counts |
 | `realtime_dashboard.html` | live HTML | auto-refreshing browser dashboard with plots |
 
-`results.csv` and the summary CSVs are the main artifacts for
-offline analysis. The real-time CSV streams and HTML dashboard provide
-live insights during simulation; the PNGs are generated automatically for visual inspection.
-
----
-
-## Major results (full run, `Dave-2/ambiegen_2`, 973 roads)
-
-The following headline numbers are from the latest full run stored
-in `./results`.
-
-### Overall
-
-| Metric | Value |
-|--------|-------|
-| Roads evaluated | 973 |
-| Avg total violation duration per road | 9.265 s |
-| P95 total violation duration per road | 18.233 s |
-| Top-risk road ID | 349 |
-| Top-risk total violation duration | 48.830 s |
-
-### STL property outcomes
-
-| Property | Violated roads (%) | Mean violation duration (s) | P95 violation duration (s) |
-|----------|---------------------|-----------------------------|----------------------------|
-| P1 lane keeping | 87.87 | 1.402 | 3.457 |
-| P2 speed stability | 0.10 | 0.000 | 0.000 |
-| P3 steering smoothness | 50.15 | 0.086 | 0.408 |
-| P4 heading alignment | 14.08 | 0.020 | 0.108 |
-| P5 recovery | 90.13 | 2.263 | 5.679 |
-| P6 curvature safety | 99.28 | 5.493 | 10.098 |
-
-### Key interpretable metric summaries
-
-| Metric | Mean | Median | P95 |
-|--------|------|--------|-----|
-| `mean_abs_cte` | 0.336 | 0.333 | 0.463 |
-| `cte_near_boundary_rate` | 0.0238 | 0.0088 | 0.0933 |
-| `steering_jerk_rate_0p1` | 0.0085 | 0.0074 | 0.0208 |
-| `cte_recovery_success_rate_2p5s` | 0.5338 | 0.5000 | 1.0000 |
-
----
-
-## Citation
+## 📚 Citation
 
 The simulation traces used here were originally collected for:
 
