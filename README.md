@@ -1,4 +1,4 @@
-# 🚗 ADS STL Monitor
+# 🚗 STL-Based Safety Assurance Framework for Autonomous Systems 
 
 > Runtime verification for autonomous-driving simulations using Signal Temporal Logic (STL).
 
